@@ -20,6 +20,7 @@
 #define Debug ((int)1)
 #define Warning ((int)2)
 #define Error ((int)3)
+#define buffsize ((int)0x1000)
 
 class logger {
 	friend inline void swap(logger&, logger&);
@@ -41,7 +42,7 @@ public:
 		local = localtime(&nowtime);
 
 		hour = new int(local->tm_hour);
-
+		buffer = new char[buffsize];
 	}
 	logger(const logger& other){
 		int _counter=other.counter->fetch_add(1)+1;
@@ -52,16 +53,16 @@ public:
 		counter = other.counter;
 		filename = other.filename;
 		hour = other.hour;
-
+		buffer=other.buffer;
 	}
 	logger& operator=(const logger& other) {
 		int other_counters = other.counter->fetch_add(1)+1;
-		int this_counters = counter->fetch_add(-1)-1;
 
-		if (this_counters == 0) {
+		if (counter->fetch_add(-1) == 1) {
 			delete logfile;
 			delete mutex_for_data;
 			delete counter;
+			delete []buffer;
 		}
 
 		degree=other.degree.load();
@@ -70,6 +71,7 @@ public:
 		counter = other.counter;
 		filename = other.filename;
 		hour = other.hour;
+		buffer = other.buffer;
 	}
 
 	logger(logger&& other) noexcept {
@@ -81,6 +83,7 @@ public:
 		counter = other.counter;
 		filename = other.filename;
 		hour = other.hour;
+		buffer = other.buffer;
 	}
 
 	logger& operator=(logger&& other) {
@@ -88,23 +91,23 @@ public:
 		return *this;
 	}
 
+
+
 	void error(const char* format,...) const{
 		if(degree>Error)
 			return;
 		va_list args;
 		va_start(args, format);
-	
-		char* errstr=strerror(errno);
-		size_t __len=strlen(errstr);		
 
-		size_t _len=strlen(format)*10;
-		size_t len=0x100>_len?0x100:_len;
-		char* buffer=new char[len+__len];
-		while(len<=vsnprintf(buffer,len,format,args)){
-			delete buffer;
-			len*=4;
-			buffer=new char[len+__len];
+		char* buff=nullptr;
+		char* errstr=strerror(errno);
+		size_t error_len=strlen(errstr);	
+
+		size_t len=vsnprintf(buffer,len,format,args)
+		if(buffsize<len){
+			buff=new char[len+error_len];
 		}
+		
 		va_end(args);
 
 		strcat(buffer,errstr);
@@ -123,9 +126,6 @@ public:
 		if(degree>Debug)
 			return;
 
-		size_t _len=strlen(format)*10;
-		size_t len=0x100>_len?0x100:_len;
-		char* buffer=new char[len];
 		while(len<=vsnprintf(buffer,len,format,args)){
 			delete buffer;
 			len*=4;
@@ -181,7 +181,7 @@ public:
 		size_t len=0x100>_len?0x100:_len;
 		char* buffer=new char[len];
 		while(len<=vsnprintf(buffer,len,format,args)){
-			delete buffer;
+			delete []buffer;
 			len*=4;
 			buffer=new char[len];
 		}
@@ -189,7 +189,7 @@ public:
 		std::string towrite(buffer,strlen(buffer));
 		Print(towrite);
 		if(buffer!=NULL)
-			delete buffer;
+			delete []buffer;
 	}
 
 	void print(const std::string& text) const{
@@ -205,6 +205,7 @@ public:
 			delete logfile;
 			delete mutex_for_data;
 			delete counter;
+			delete []buffer;
 		}
 	}
 	inline void set_degree(int a){
@@ -224,6 +225,8 @@ private:
 	int* hour;
 	std::mutex* mutex_for_data;
 	std::atomic<int> degree;
+	//the buffer output to stream
+	char* buffer;
 
 	void Print(const std::string& text,int type=Info) const {
 		static int check_hour;
