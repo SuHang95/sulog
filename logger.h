@@ -22,13 +22,42 @@
 #define Error ((int)3)
 #define buffsize ((int)0x1000)
 
-class logger {
-	friend inline void swap(logger&, logger&);
-public:
-	logger(){}
-	logger(const std::string& name,int _degree=0):
-		degree(_degree){
-		counter = new std::atomic<int>(1);
+namespace su{
+	class logger_internal{
+		public:
+			logger_internal(){}
+
+
+
+
+
+
+
+
+
+		private:
+			//most of us don't read the log,so we hava not use the read-write lock
+			std::mutex lock;
+			int fd;
+			
+	};
+
+
+
+
+
+
+
+
+
+
+
+	class logger {
+	public:
+		logger(){}
+		logger(const std::string& name,int _degree=0):
+			degree(_degree){
+			counter = new std::atomic<int>(1);
 		mutex_for_data = new std::mutex();
 
 		filename = name;
@@ -348,6 +377,6 @@ inline void logger::reopen() const {
 	logfile->open(newname, std::ios_base::in | std::ios_base::out | std::ios_base::ate | std::ios_base::app);
 	mutex_for_data->unlock();
 }
-
+}
 
 #endif
